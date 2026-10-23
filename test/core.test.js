@@ -80,6 +80,21 @@ for (let seed = 1; seed <= 40; seed++) {
   checks++;
 }
 
+// Saisie rapide : l'état construit montre exactement les arêtes et orbites demandées.
+{
+  const flips = { UF: [1, 4], BL: [6], DR: [2, 3, 5] };
+  const cube = C.makeFlippedState(N, flips);
+  const a = C.analyze(cube);
+  assert(a.centersOk);
+  const got = {};
+  a.edges.forEach((e) => { assert.deepStrictEqual(e.unpaired, []); if (e.flipped.length) got[e.name] = e.flipped; });
+  assert.deepStrictEqual(got, flips);
+  const sol = C.solveParity(cube);
+  sol.steps.forEach((s) => cube.applyMove(s.move));
+  assert(C.analyze(cube).edges.every((e) => !e.flipped.length));
+  checks++;
+}
+
 // Autres tailles impaires.
 for (const n of [5, 7, 9, 11, 13]) {
   const cube = C.makeParityExample(n, lcg(n));

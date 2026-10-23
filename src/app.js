@@ -59,33 +59,38 @@
   let hits = [];
 
   function resize() {
-    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
     const r = canvas.getBoundingClientRect();
-    W = Math.max(1, r.width); H = Math.max(1, r.height);
-    canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+    const w = Math.max(1, r.width), h = Math.max(1, r.height);
+    const cw = Math.round(w * DPR), ch = Math.round(h * DPR);
+    W = w; H = h;
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
     requestDraw();
   }
 
-  function rotAbout(p, k, c, s) {
-    const [x, y, z] = p;
-    if (k === 0) return [x, y * c - z * s, y * s + z * c];
-    if (k === 1) return [x * c + z * s, y, -x * s + z * c];
-    return [x * c - y * s, x * s + y * c, z];
+  // Matrice de rotation d'angle a autour de l'axe k (même sens que le moteur).
+  function axisRot(k, a) {
+    const c = Math.cos(a), s = Math.sin(a);
+    if (k === 0) return [1, 0, 0, 0, c, -s, 0, s, c];
+    if (k === 1) return [c, 0, s, 0, 1, 0, -s, 0, c];
+    return [c, -s, 0, s, c, 0, 0, 0, 1];
   }
 
   // Octogone (carré chanfreiné) d'un sticker dans son plan.
   const H1 = 0.44, H2 = 0.32;
-  const OCT = [[H2, H1], [H1, H2], [H1, -H2], [H2, -H1], [-H2, -H1], [-H1, -H2], [-H1, H2], [-H2, H1]];
+  const OCT = [H2, H1, H1, H2, H1, -H2, H2, -H1, -H2, -H1, -H1, -H2, -H1, H2, -H2, H1];
   const LIGHT = (() => { const l = [-0.35, 0.55, 1]; const n = Math.hypot(...l); return l.map((v) => v / n); })();
+  const SP = new Float64Array(16);
+  const buckets = [[], [], [], [], [], []];
 
   function draw() {
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     ctx.clearRect(0, 0, W, H);
     if (!cube) return;
-    const V = view;
     const f = (zoom * Math.min(W, H) * 0.43 * CAM) / (0.87 * N);
     const cx = W / 2 + panX, cy = H / 2 + panY;
     const half = N / 2;
+    const V = view;
     const cam = [V[6] * CAM, V[7] * CAM, V[8] * CAM];
     const ax = anim ? anim.axis : 1;
 
@@ -105,87 +110,76 @@
     runs.sort((p, q) => q.dist - p.dist); // la plus éloignée d'abord
 
     // Stickers rangés par direction de normale.
-    const buckets = [[], [], [], [], [], []];
-    const pos = cube.pos, nrm = cube.nrm;
+    const pos = cube.pos, nrm = cube.nrm, col = cube.col;
+    for (const b of buckets) b.length = 0;
     for (let i = 0; i < cube.count; i++) {
       const k = nrm[3 * i] ? 0 : nrm[3 * i + 1] ? 1 : 2;
       buckets[k * 2 + (nrm[3 * i + k] > 0 ? 0 : 1)].push(i);
     }
 
-    const project = (p, out) => {
-      const vx = V[0] * p[0] + V[1] * p[1] + V[2] * p[2];
-      const vy = V[3] * p[0] + V[4] * p[1] + V[5] * p[2];
-      const vz = V[6] * p[0] + V[7] * p[1] + V[8] * p[2];
-      const d = CAM - vz;
-      out.push(cx + (f * vx) / d, cy - (f * vy) / d);
-    };
-
+    const keepHits = paintMode;
     hits = [];
-    const angle = anim ? anim.angle : 0;
-    const ca = Math.cos(angle), sa = Math.sin(angle);
-    ctx.lineJoin = 'round';
+    const markWidth = Math.max(1.5, Math.min(3.5, (f / CAM) * 0.12));
 
     for (const run of runs) {
-      const R = run.moving ? (p) => rotAbout(p, ax, ca, sa) : (p) => p;
+      // M = vue x rotation de la tranche : tout point du cube passe par M.
+      const M = run.moving ? mul(V, axisRot(ax, anim.angle)) : V;
+      const M0 = M[0], M1 = M[1], M2 = M[2], M3 = M[3], M4 = M[4], M5 = M[5], M6 = M[6], M7 = M[7], M8 = M[8];
+      const lo = [-half, -half, -half], hi = [half, half, half];
+      lo[ax] = run.lo; hi[ax] = run.hi;
+
       for (let dir = 0; dir < 6; dir++) {
         const k = dir >> 1, s = dir & 1 ? -1 : 1;
         const o1 = (k + 1) % 3, o2 = (k + 2) % 3;
-        const range = (axis) => (axis === ax ? [run.lo, run.hi] : [-half, half]);
-        const plane = k === ax ? (s > 0 ? run.hi : run.lo) : s * half;
-        // Visibilité de la face du bloc.
-        const nW = R([k === 0 ? s : 0, k === 1 ? s : 0, k === 2 ? s : 0]);
-        const center = [0, 0, 0];
-        center[k] = plane;
-        center[o1] = (range(o1)[0] + range(o1)[1]) / 2;
-        center[o2] = (range(o2)[0] + range(o2)[1]) / 2;
-        const cW = R(center);
-        const nv = [V[0] * nW[0] + V[1] * nW[1] + V[2] * nW[2], V[3] * nW[0] + V[4] * nW[1] + V[5] * nW[2], V[6] * nW[0] + V[7] * nW[1] + V[8] * nW[2]];
-        const pv = [V[0] * cW[0] + V[1] * cW[1] + V[2] * cW[2], V[3] * cW[0] + V[4] * cW[1] + V[5] * cW[2], V[6] * cW[0] + V[7] * cW[1] + V[8] * cW[2]];
-        if (nv[0] * pv[0] + nv[1] * pv[1] + nv[2] * (pv[2] - CAM) >= 0) continue;
+        const plane = s > 0 ? hi[k] : lo[k];
+        // Normale et centre de la face du bloc, en coordonnées de vue.
+        const nx = M[k] * s, ny = M[3 + k] * s, nz = M[6 + k] * s;
+        const c = [0, 0, 0];
+        c[k] = plane; c[o1] = (lo[o1] + hi[o1]) / 2; c[o2] = (lo[o2] + hi[o2]) / 2;
+        const pz = M6 * c[0] + M7 * c[1] + M8 * c[2];
+        const px = M0 * c[0] + M1 * c[1] + M2 * c[2];
+        const py = M3 * c[0] + M4 * c[1] + M5 * c[2];
+        if (nx * px + ny * py + nz * (pz - CAM) >= 0) continue;
+        const light = 0.6 + 0.4 * Math.max(0, nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]);
 
-        const light = 0.6 + 0.4 * Math.max(0, nv[0] * LIGHT[0] + nv[1] * LIGHT[1] + nv[2] * LIGHT[2]);
+        // Colonnes de M pour les deux directions du plan.
+        const ux = M[o1], uy = M[3 + o1], uz = M[6 + o1];
+        const vx = M[o2], vy = M[3 + o2], vz = M[6 + o2];
 
         // Fond noir de la face du bloc.
-        const pts = [];
-        const r1 = range(o1), r2 = range(o2);
-        [[r1[0], r2[0]], [r1[1], r2[0]], [r1[1], r2[1]], [r1[0], r2[1]]].forEach(([u, v]) => {
-          const p = [0, 0, 0]; p[k] = plane; p[o1] = u; p[o2] = v;
-          project(R(p), pts);
-        });
+        const du = [lo[o1] - c[o1], hi[o1] - c[o1]], dv = [lo[o2] - c[o2], hi[o2] - c[o2]];
         ctx.fillStyle = shadeCss(bodyRGB, light);
         ctx.beginPath();
-        ctx.moveTo(pts[0], pts[1]);
-        for (let j = 2; j < pts.length; j += 2) ctx.lineTo(pts[j], pts[j + 1]);
+        [[0, 0], [1, 0], [1, 1], [0, 1]].forEach(([a, b], j) => {
+          const X = px + du[a] * ux + dv[b] * vx, Y = py + du[a] * uy + dv[b] * vy, Z = pz + du[a] * uz + dv[b] * vz;
+          const d = CAM - Z, sx = cx + (f * X) / d, sy = cy - (f * Y) / d;
+          if (j) ctx.lineTo(sx, sy); else ctx.moveTo(sx, sy);
+        });
         ctx.closePath(); ctx.fill();
 
         // Face interne (coupe) : pas de stickers.
         if (k === ax && (s > 0 ? run.b < N - 1 : run.a > 0)) continue;
 
-        const fills = new Map();
+        const fills = [];
         for (const i of buckets[dir]) {
           const layer = (pos[3 * i + ax] - nrm[3 * i + ax] + N - 1) / 2;
           if (layer < run.a || layer > run.b) continue;
-          const c = [pos[3 * i] / 2, pos[3 * i + 1] / 2, pos[3 * i + 2] / 2];
-          const sp = [];
-          for (const [u, v] of OCT) {
-            const p = [c[0], c[1], c[2]];
-            p[o1] += u; p[o2] += v;
-            project(R(p), sp);
+          const x0 = pos[3 * i] / 2, y0 = pos[3 * i + 1] / 2, z0 = pos[3 * i + 2] / 2;
+          const qx = M0 * x0 + M1 * y0 + M2 * z0, qy = M3 * x0 + M4 * y0 + M5 * z0, qz = M6 * x0 + M7 * y0 + M8 * z0;
+          for (let j = 0; j < 16; j += 2) {
+            const a = OCT[j], b = OCT[j + 1];
+            const d = CAM - (qz + a * uz + b * vz);
+            SP[j] = cx + (f * (qx + a * ux + b * vx)) / d;
+            SP[j + 1] = cy - (f * (qy + a * uy + b * vy)) / d;
           }
-          const ci = cube.col[i];
-          let fill = fills.get(ci);
-          if (!fill) { fill = shadeCss(DISPLAY_RGB[paletteMap[ci]], light); fills.set(ci, fill); }
-          ctx.fillStyle = fill;
+          const ci = col[i];
+          ctx.fillStyle = fills[ci] || (fills[ci] = shadeCss(DISPLAY_RGB[paletteMap[ci]], light));
           ctx.beginPath();
-          ctx.moveTo(sp[0], sp[1]);
-          for (let j = 2; j < sp.length; j += 2) ctx.lineTo(sp[j], sp[j + 1]);
+          ctx.moveTo(SP[0], SP[1]);
+          for (let j = 2; j < 16; j += 2) ctx.lineTo(SP[j], SP[j + 1]);
           ctx.closePath(); ctx.fill();
-          if (highlight.has(i)) {
-            ctx.strokeStyle = markColor;
-            ctx.lineWidth = Math.max(1.5, Math.min(3.5, f / CAM * 0.12));
-            ctx.stroke();
-          }
-          hits.push({ i, sp });
+          if (highlight.has(i)) { ctx.strokeStyle = markColor; ctx.lineWidth = markWidth; ctx.stroke(); }
+          if (keepHits) hits.push({ i, sp: Float64Array.from(SP) });
         }
       }
     }
@@ -252,7 +246,7 @@
     if (d.length === 1) what = d[0] === 1 ? `Face ${FACE_NAME[m.face]}` : `Tranche ${d[0]} ${FROM[m.face]}, seule`;
     else what = `Tranches ${d.join(', ')} ${FROM[m.face]}`;
     const turn = m.turns === 2 ? 'demi-tour' : m.turns === 1 ? '¼ de tour horaire' : '¼ de tour anti-horaire';
-    return `${what} · ${turn}${m.turns === 2 ? '' : ' ' + SEEN[m.face]}`;
+    return { what, turn: turn + (m.turns === 2 ? '' : ' ' + SEEN[m.face]) };
   }
 
   function updatePlayer() {
@@ -272,8 +266,9 @@
     } else {
       const s = st[cur];
       $('nowMove').textContent = C.moveToString(s.move);
-      $('nowDesc').textContent = describe(s.move);
-      $('nowNote').textContent = (anim ? 'En cours · ' : 'Prochain · ') + s.note;
+      const d = describe(s.move);
+      $('nowDesc').textContent = d.what;
+      $('nowNote').textContent = `${d.turn} · ${s.note}`;
     }
     $('btnPlay').textContent = playing ? '⏸' : '▶';
     $('btnPlay').setAttribute('aria-label', playing ? 'Pause' : 'Lecture');
@@ -313,7 +308,7 @@
       b.dataset.k = k;
       b.dataset.phase = s.phase;
       b.textContent = C.moveToString(s.move);
-      b.title = describe(s.move);
+      b.title = `${describe(s.move).what}, ${describe(s.move).turn}`;
       b.addEventListener('click', () => jump(k));
       strip.appendChild(b);
     });
@@ -389,7 +384,7 @@
     const flipped = a.edges.filter((e) => e.flipped.length);
     const chip = $('statusChip');
     const parts = [];
-    const tag = source === 'exemple' ? 'Exemple généré au hasard. ' : '';
+    const tag = source === 'exemple' ? 'Exemple généré au hasard. ' : source === 'saisie' ? 'Cube reconstruit depuis ta saisie. ' : '';
     if (flipped.length) {
       chip.dataset.tone = 'warn';
       chip.textContent = `Parité : ${flipped.length} arête${flipped.length > 1 ? 's' : ''}`;
@@ -520,6 +515,7 @@
     $('btnPaint').setAttribute('aria-pressed', String(paintMode));
     $('paintBar').hidden = !paintMode;
     if (paintMode) renderSwatches();
+    requestDraw();
   });
 
   // ---------- Boutons ----------
@@ -538,7 +534,7 @@
   $('btnHelp').addEventListener('click', () => { $('helpSheet').hidden = false; });
   $('btnHelpClose').addEventListener('click', () => { $('helpSheet').hidden = true; });
   document.addEventListener('keydown', (ev) => {
-    if (!$('photoSheet').hidden || !$('helpSheet').hidden || ev.target.tagName === 'INPUT') return;
+    if (!$('photoSheet').hidden || !$('helpSheet').hidden || !$('quickSheet').hidden || /INPUT|TEXTAREA/.test(ev.target.tagName)) return;
     if (ev.key === ' ') { ev.preventDefault(); playing ? stop() : play(); }
     else if (ev.key === 'ArrowRight') { stop(); stepForward(); }
     else if (ev.key === 'ArrowLeft') stepBack();
@@ -813,9 +809,8 @@
   pCanvas.addEventListener('pointerup', endDrag);
   pCanvas.addEventListener('pointercancel', endDrag);
 
-  $('fileInput').addEventListener('change', (ev) => {
-    const file = ev.target.files && ev.target.files[0];
-    if (!file) return;
+  function loadImageFile(file) {
+    if (!file || !/^image\//.test(file.type || 'image/')) return;
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
@@ -834,7 +829,23 @@
     };
     img.onerror = () => { $('photoHint').textContent = "Cette image n'a pas pu être ouverte. Essaie une photo JPEG ou PNG."; };
     img.src = url;
+  }
+  ['fileInput', 'camInput'].forEach((id) => $(id).addEventListener('change', (ev) => {
+    loadImageFile(ev.target.files && ev.target.files[0]);
     ev.target.value = '';
+  }));
+  // Coller une image (copiée depuis la galerie) ou la glisser sur la zone.
+  document.addEventListener('paste', (ev) => {
+    if ($('photoSheet').hidden) return;
+    const item = [...(ev.clipboardData ? ev.clipboardData.items : [])].find((it) => it.type.startsWith('image/'));
+    if (item) { ev.preventDefault(); loadImageFile(item.getAsFile()); }
+    $('pasteZone').value = '';
+  });
+  $('pasteZone').addEventListener('input', () => { $('pasteZone').value = ''; });
+  $('photoStage').addEventListener('dragover', (ev) => ev.preventDefault());
+  $('photoStage').addEventListener('drop', (ev) => {
+    ev.preventDefault();
+    loadImageFile(ev.dataTransfer.files && ev.dataTransfer.files[0]);
   });
 
   $('btnUndoPt').addEventListener('click', () => { photo.pts[photo.face] = []; renderPhotoHint(); drawPhoto(); });
@@ -872,6 +883,72 @@
     requestAnimationFrame(resizePhoto);
   });
   $('btnPhotoClose').addEventListener('click', () => { $('photoSheet').hidden = true; requestAnimationFrame(resize); });
+
+  // =====================================================================
+  // Saisie rapide : arête fautive + paires d'ailes retournées
+  // =====================================================================
+  const quick = { edge: 'UF', flips: {} };
+  const ORBITS = Array.from({ length: (N - 3) / 2 }, (_, k) => k + 1);
+
+  function renderQuick() {
+    const ep = $('edgePick');
+    ep.textContent = '';
+    C.EDGES.forEach(([A, B]) => {
+      const name = A + B;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'edge-btn';
+      b.setAttribute('aria-pressed', String(name === quick.edge));
+      b.dataset.count = String((quick.flips[name] || []).length);
+      b.innerHTML = `<b>${name}</b><span>${FACE_SHORT[A]}-${FACE_SHORT[B]}</span>`;
+      b.addEventListener('click', () => { quick.edge = name; renderQuick(); });
+      ep.appendChild(b);
+    });
+    const wp = $('wingPick');
+    wp.textContent = '';
+    const cur = quick.flips[quick.edge] || [];
+    ORBITS.forEach((j) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'wing-btn';
+      b.setAttribute('aria-pressed', String(cur.includes(j)));
+      b.innerHTML = `<b>${j + 1} et ${N - j}</b><span>${j === 1 ? 'près des coins' : j === ORBITS.length ? 'près du milieu' : 'ailes n°' + (j + 1)}</span>`;
+      b.addEventListener('click', () => {
+        const list = (quick.flips[quick.edge] || []).slice();
+        const at = list.indexOf(j);
+        if (at >= 0) list.splice(at, 1); else list.push(j);
+        list.sort((x, y) => x - y);
+        if (list.length) quick.flips[quick.edge] = list; else delete quick.flips[quick.edge];
+        renderQuick();
+      });
+      wp.appendChild(b);
+    });
+    const names = Object.keys(quick.flips);
+    $('quickSummary').innerHTML = names.length
+      ? 'Sélection : ' + names.map((n) => `<b>${n}</b> ailes ${quick.flips[n].map((j) => `${j + 1}/${N - j}`).join(', ')}`).join(' · ')
+      : 'Aucune aile sélectionnée.';
+  }
+
+  $('btnQuick').addEventListener('click', () => {
+    stop();
+    quick.flips = {};
+    if (source === 'saisie' || source === 'photo') {
+      solution.analysis.edges.forEach((e) => { if (e.flipped.length) quick.flips[e.name] = e.flipped.slice(); });
+    }
+    quick.edge = Object.keys(quick.flips)[0] || 'UF';
+    renderQuick();
+    $('quickSheet').hidden = false;
+  });
+  $('btnQuickClose').addEventListener('click', () => { $('quickSheet').hidden = true; });
+  $('btnQuickClear').addEventListener('click', () => { quick.flips = {}; renderQuick(); });
+  $('btnQuickApply').addEventListener('click', () => {
+    cube = C.makeFlippedState(N, quick.flips);
+    source = 'saisie';
+    paletteMap = [0, 1, 2, 3, 4, 5];
+    recompute();
+    $('quickSheet').hidden = true;
+    requestAnimationFrame(resize);
+  });
 
   // ---------- Démarrage ----------
   readTheme();

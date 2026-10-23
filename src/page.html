@@ -44,7 +44,8 @@
     </div>
 
     <div class="tools">
-      <button class="tool tool-main" id="btnPhoto" type="button">Depuis mes photos</button>
+      <button class="tool tool-main" id="btnQuick" type="button">Signaler ma parité</button>
+      <button class="tool" id="btnPhoto" type="button">Depuis mes photos</button>
       <button class="tool" id="btnPaint" type="button" aria-pressed="false">Peindre</button>
       <button class="tool" id="btnExample" type="button">Exemple</button>
       <button class="tool" id="btnSolved" type="button">Cube résolu</button>
@@ -63,17 +64,45 @@
   <div class="photo-hint" id="photoHint"></div>
   <div class="photo-stage" id="photoStage">
     <canvas id="photoCanvas"></canvas>
-    <label class="photo-empty" id="photoEmpty" for="fileInput">
-      <span class="photo-empty-title">Choisir une photo</span>
-      <span>Galerie ou appareil photo. Une photo peut servir pour 3 faces.</span>
-    </label>
+    <div class="photo-empty" id="photoEmpty">
+      <span class="photo-empty-title">Ajoute une photo du cube</span>
+      <span>Une photo prise en biais peut servir pour 3 faces.</span>
+      <div class="photo-src">
+        <label class="tool tool-main" for="camInput">Prendre une photo</label>
+        <label class="tool" for="fileInput">Galerie</label>
+      </div>
+      <textarea id="pasteZone" class="paste-zone" rows="2" placeholder="Ou appuie longuement ici puis « Coller » une image copiée"></textarea>
+      <span class="photo-fallback">Rien ne s'ouvre ? Le navigateur intégré à l'app Claude bloque parfois l'appareil photo. Ouvre la page dans Chrome ou Safari, ou utilise « Signaler ma parité ».</span>
+    </div>
   </div>
   <div class="sheet-actions">
     <label class="tool" for="fileInput">Autre photo</label>
-    <input type="file" id="fileInput" accept="image/*" hidden>
+    <input type="file" id="fileInput" accept="image/*" class="file-hidden">
+    <input type="file" id="camInput" accept="image/*" capture="environment" class="file-hidden">
     <button class="tool" id="btnUndoPt" type="button">Effacer les coins</button>
     <button class="tool" id="btnRotate" type="button">Tourner ↻</button>
     <button class="tool tool-main" id="btnApply" type="button" disabled>Appliquer</button>
+  </div>
+</div>
+
+<!-- Saisie rapide -->
+<div class="sheet" id="quickSheet" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="btnQuickClose" type="button" aria-label="Fermer">✕</button>
+    <div class="sheet-title">Signaler ma parité</div>
+  </div>
+  <div class="quick">
+    <p class="quick-hint">Le plus simple : tiens ton cube avec l'arête fautive <b>en haut, face à toi</b> (UF). Sinon, choisis où elle se trouve.</p>
+    <div class="quick-label">1. Arête fautive</div>
+    <div class="edge-pick" id="edgePick"></div>
+    <div class="quick-label">2. Ailes retournées sur cette arête</div>
+    <p class="quick-hint">Compte depuis un coin de l'arête : le coin est n°1, l'aile du milieu est n°8. Une aile retournée et sa jumelle symétrique forment une paire.</p>
+    <div class="wing-pick" id="wingPick"></div>
+    <div class="quick-summary" id="quickSummary"></div>
+  </div>
+  <div class="sheet-actions">
+    <button class="tool" id="btnQuickClear" type="button">Tout effacer</button>
+    <button class="tool tool-main" id="btnQuickApply" type="button">Voir la solution</button>
   </div>
 </div>
 
@@ -87,6 +116,7 @@
     <h3>Manipuler le cube</h3>
     <p>Glisse un doigt pour faire tourner le cube, pince avec deux doigts pour zoomer.</p>
     <h3>Entrer ton cube</h3>
+    <p><b>Signaler ma parité</b> : choisis l'arête fautive et les numéros des ailes retournées. C'est le plus rapide.</p>
     <p><b>Depuis mes photos</b> : choisis la face (U, F, R…), touche ses 4 coins sur la photo dans l'ordre haut-gauche, haut-droit, bas-droit, bas-gauche, vérifie l'aperçu puis <b>Appliquer</b>. Une photo prise en biais qui montre 3 faces sert pour les 3. Corrige ensuite les erreurs avec <b>Peindre</b>.</p>
     <p>Orientation des faces : pour F, R, B, L, la face du haut (U) est en haut. Pour U, l'arrière (B) est en haut. Pour D, l'avant (F) est en haut. Si l'aperçu est tourné, utilise <b>Tourner ↻</b>.</p>
     <h3>Notation</h3>

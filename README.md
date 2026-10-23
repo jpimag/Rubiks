@@ -6,8 +6,9 @@ Tout tient dans une page web : elle marche sur téléphone, sans installation.
 
 ## Utilisation
 
-Ouvrir `dist/index.html` dans un navigateur (ou la version publiée).
+Ouvrir `dist/index.html` dans un navigateur (ou la version publiée). Dans l'app Claude sur téléphone, l'appareil photo peut être bloqué : ouvrir alors la page dans Chrome ou Safari.
 
+- **Signaler ma parité** : choisir l'arête fautive et les paires d'ailes retournées (2 et 14, 3 et 13…). Le plus rapide, sans photo.
 - **Glisser** : tourner le cube. **Pincer** : zoomer.
 - **Depuis mes photos** : choisir la face, toucher ses 4 coins (haut-gauche, haut-droit, bas-droit, bas-gauche), vérifier l'aperçu, *Appliquer*. Une photo en biais qui montre 3 faces sert pour les 3. Photographier les 6 faces.
   - Faces F, R, B, L : la face U en haut. Face U : le côté B en haut. Face D : le côté F en haut.

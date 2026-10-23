@@ -124,7 +124,7 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
   min-width: 0;
 }
 
-.report { font-size: 13px; line-height: 1.4; color: var(--muted); min-width: 0; }
+.report { font-size: 13px; max-height: 5.6em; overflow-y: auto; line-height: 1.4; color: var(--muted); min-width: 0; }
 .report b { color: var(--ink); }
 .report .issue { color: var(--bad); }
 .report .edge-tag {
@@ -132,15 +132,16 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
 }
 
 .player { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.now { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.now { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto; align-items: center; gap: 12px; height: 46px; }
 .now-move {
   font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
-  min-width: 2.6ch; text-align: center; color: var(--accent);
+  text-align: center; color: var(--accent); white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
 .now-text { min-width: 0; }
-.now-desc { font-size: 14px; font-weight: 600; }
-.now-note { font-size: 12px; color: var(--muted); }
+.now-desc, .now-note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-desc { font-size: 14px; font-weight: 600; line-height: 20px; }
+.now-note { font-size: 12px; color: var(--accent); font-weight: 600; line-height: 17px; }
 .now-count { font-family: var(--font-mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .progress { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
 .progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
@@ -157,6 +158,7 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
 .speed input { flex: 1; accent-color: var(--accent); }
 
 .moves {
+  height: 34px; flex: none;
   display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;
 }
 .mv {
@@ -219,3 +221,30 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
 @media (prefers-reduced-motion: reduce) {
   .progress-fill { transition: none; }
 }
+
+.file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.photo-src { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 6px; }
+.paste-zone {
+  width: min(320px, 100%); resize: none; border-radius: 10px; border: 1px dashed var(--line);
+  background: var(--panel); padding: 8px; font-family: var(--font-body); font-size: 12px; text-align: center;
+}
+.photo-fallback { max-width: 40ch; font-size: 12px; }
+.photo-empty { pointer-events: auto; cursor: default; }
+
+.quick { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.quick-hint { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.4; max-width: 60ch; }
+.quick-hint b { color: var(--ink); }
+.quick-label { font-family: var(--font-display); font-weight: 700; font-size: 15px; margin-top: 6px; }
+.edge-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.edge-btn, .wing-btn {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 10px; cursor: pointer;
+  padding: 7px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; touch-action: manipulation;
+}
+.edge-btn b, .wing-btn b { font-family: var(--font-display); font-size: 16px; }
+.edge-btn span, .wing-btn span { font-size: 11px; color: var(--muted); }
+.edge-btn[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.edge-btn[data-count]:not([data-count="0"]) b { color: var(--mark); }
+.wing-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.wing-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.wing-btn[aria-pressed="true"] span { color: var(--accent-ink); }
+.quick-summary { font-size: 13px; min-height: 1.4em; }

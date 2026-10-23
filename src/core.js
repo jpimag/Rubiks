@@ -333,6 +333,19 @@
     return { analysis: a, steps, issues };
   }
 
+  // Cube réduit avec, pour chaque arête donnée, les orbites indiquées retournées.
+  // flips : { UF: [1, 3], BL: [2] } ; chaque arête est traitée par conjugaison (mise en place, parité, retour).
+  function makeFlippedState(n, flips) {
+    const cube = new Cube(n);
+    Object.keys(flips).forEach((name) => {
+      const orbits = flips[name];
+      if (!orbits || !orbits.length) return;
+      const setup = setupToUF(name[0], name[1]);
+      cube.applyAlg(setup).applyAlg(parityAlg(orbits)).applyAlg(invertAlg(setup));
+    });
+    return cube;
+  }
+
   // Exemple : cube réduit avec une parité d'arête sur une arête et des orbites au hasard.
   function makeParityExample(n, rnd = Math.random) {
     const cube = new Cube(n);
@@ -347,7 +360,7 @@
   const api = {
     FACES, NORMALS, FACE_AXES, COLORS, EDGES, Cube, rot, axisOf,
     moveToString, parseMove, parseAlg, invertMove, invertAlg,
-    analyze, setupToUF, parityAlg, solveParity, makeParityExample, wingStickers,
+    analyze, setupToUF, parityAlg, solveParity, makeParityExample, makeFlippedState, wingStickers,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RubikCore = api;
