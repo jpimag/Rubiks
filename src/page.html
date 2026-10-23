@@ -1,0 +1,97 @@
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand">
+      <span class="brand-name">Parité 15×15</span>
+      <span class="chip" id="statusChip" data-tone="idle">Analyse…</span>
+    </div>
+    <button class="icon-btn" id="btnHelp" type="button" aria-label="Aide">?</button>
+  </header>
+
+  <section class="stage" id="stage">
+    <canvas id="view" aria-label="Cube 15×15 en 3D. Glisse pour tourner, pince pour zoomer."></canvas>
+    <div class="hold" id="holdHint"></div>
+    <div class="paint-bar" id="paintBar" hidden>
+      <span class="paint-label">Touche un sticker pour le peindre</span>
+      <div class="swatches" id="swatches"></div>
+    </div>
+  </section>
+
+  <aside class="dock">
+    <div class="report" id="report"></div>
+
+    <div class="player">
+      <div class="now">
+        <div class="now-move" id="nowMove">–</div>
+        <div class="now-text">
+          <div class="now-desc" id="nowDesc">Aucun mouvement</div>
+          <div class="now-note" id="nowNote"></div>
+        </div>
+        <div class="now-count" id="nowCount">0 / 0</div>
+      </div>
+      <div class="progress"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="controls">
+        <button class="ctl" id="btnFirst" type="button" aria-label="Revenir au début">⏮</button>
+        <button class="ctl" id="btnPrev" type="button" aria-label="Mouvement précédent">◀</button>
+        <button class="ctl ctl-play" id="btnPlay" type="button" aria-label="Lecture">▶</button>
+        <button class="ctl" id="btnNext" type="button" aria-label="Mouvement suivant">▶|</button>
+        <button class="ctl" id="btnLast" type="button" aria-label="Aller à la fin">⏭</button>
+      </div>
+      <label class="speed" for="speed">
+        <span>Vitesse</span>
+        <input type="range" id="speed" min="0" max="100" value="45">
+      </label>
+      <div class="moves" id="moveStrip" aria-label="Liste des mouvements"></div>
+    </div>
+
+    <div class="tools">
+      <button class="tool tool-main" id="btnPhoto" type="button">Depuis mes photos</button>
+      <button class="tool" id="btnPaint" type="button" aria-pressed="false">Peindre</button>
+      <button class="tool" id="btnExample" type="button">Exemple</button>
+      <button class="tool" id="btnSolved" type="button">Cube résolu</button>
+      <button class="tool" id="btnView" type="button">Recentrer</button>
+    </div>
+  </aside>
+</div>
+
+<!-- Import photo -->
+<div class="sheet" id="photoSheet" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="btnPhotoClose" type="button" aria-label="Fermer">✕</button>
+    <div class="sheet-title">Lire les couleurs depuis une photo</div>
+  </div>
+  <div class="face-pick" id="facePick"></div>
+  <div class="photo-hint" id="photoHint"></div>
+  <div class="photo-stage" id="photoStage">
+    <canvas id="photoCanvas"></canvas>
+    <label class="photo-empty" id="photoEmpty" for="fileInput">
+      <span class="photo-empty-title">Choisir une photo</span>
+      <span>Galerie ou appareil photo. Une photo peut servir pour 3 faces.</span>
+    </label>
+  </div>
+  <div class="sheet-actions">
+    <label class="tool" for="fileInput">Autre photo</label>
+    <input type="file" id="fileInput" accept="image/*" hidden>
+    <button class="tool" id="btnUndoPt" type="button">Effacer les coins</button>
+    <button class="tool" id="btnRotate" type="button">Tourner ↻</button>
+    <button class="tool tool-main" id="btnApply" type="button" disabled>Appliquer</button>
+  </div>
+</div>
+
+<!-- Aide -->
+<div class="sheet sheet-text" id="helpSheet" hidden>
+  <div class="sheet-head">
+    <button class="icon-btn" id="btnHelpClose" type="button" aria-label="Fermer">✕</button>
+    <div class="sheet-title">Mode d'emploi</div>
+  </div>
+  <div class="help">
+    <h3>Manipuler le cube</h3>
+    <p>Glisse un doigt pour faire tourner le cube, pince avec deux doigts pour zoomer.</p>
+    <h3>Entrer ton cube</h3>
+    <p><b>Depuis mes photos</b> : choisis la face (U, F, R…), touche ses 4 coins sur la photo dans l'ordre haut-gauche, haut-droit, bas-droit, bas-gauche, vérifie l'aperçu puis <b>Appliquer</b>. Une photo prise en biais qui montre 3 faces sert pour les 3. Corrige ensuite les erreurs avec <b>Peindre</b>.</p>
+    <p>Orientation des faces : pour F, R, B, L, la face du haut (U) est en haut. Pour U, l'arrière (B) est en haut. Pour D, l'avant (F) est en haut. Si l'aperçu est tourné, utilise <b>Tourner ↻</b>.</p>
+    <h3>Notation</h3>
+    <p><code>R</code> : face de droite, ¼ de tour horaire vue de droite. <code>R'</code> : sens inverse. <code>R2</code> : demi-tour. <code>4R</code> : uniquement la 4ᵉ tranche en partant de la droite (la face compte comme tranche 1). U = haut, D = bas, F = avant, B = arrière, L = gauche.</p>
+    <h3>Ce que fait la solution</h3>
+    <p>Sur un cube impair, l'arête centrale de chaque arête sert de référence. Une parité d'arête, c'est une paire d'ailes de la même orbite retournée. La solution amène l'arête en UF, applique <code>r2 B2 U2 l U2 r' U2 r U2 F2 r F2 l' B2 r2</code> avec les tranches de chaque orbite fautive, puis remet l'arête en place. Les centres et les autres arêtes ne bougent pas.</p>
+  </div>
+</div>
