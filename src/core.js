@@ -44,7 +44,12 @@
 
   // ---------- Notation ----------
   // Un mouvement : { face, depths: [profondeurs, 1 = couche extérieure], turns: 1|2|3 }
+  // Rotation du cube entier : { face: 'R'|'U'|'F', whole: true, turns } notée x, y, z.
+  const WHOLE = { R: 'x', U: 'y', F: 'z' };
+  const suffix = (t) => (t === 2 ? '2' : t === 3 ? "'" : '');
+
   function moveToString(m) {
+    if (m.whole) return WHOLE[m.face] + suffix(m.turns);
     const d = [...m.depths].sort((a, b) => a - b);
     const lo = d[0], hi = d[d.length - 1];
     const contiguous = hi - lo + 1 === d.length;
@@ -53,10 +58,12 @@
     else if (contiguous && lo === 1) base = (hi === 2 ? '' : hi) + m.face + 'w';
     else if (contiguous) base = lo + '-' + hi + m.face;
     else base = '[' + d.join(',') + ']' + m.face;
-    return base + (m.turns === 2 ? '2' : m.turns === 3 ? "'" : '');
+    return base + suffix(m.turns);
   }
 
   function parseMove(tok) {
+    const w = /^([xyz])(2'?|')?$/.exec(tok.trim());
+    if (w) return { face: { x: 'R', y: 'U', z: 'F' }[w[1]], whole: true, depths: [], turns: w[2] === "'" ? 3 : w[2] ? 2 : 1 };
     const r = /^(\d+)?(?:-(\d+))?([URFDLB])(w)?(2'?|')?$/.exec(tok.trim());
     if (!r) throw new Error('Mouvement inconnu : ' + tok);
     const face = r[3];
@@ -73,7 +80,7 @@
   }
 
   const parseAlg = (s) => s.trim().split(/\s+/).filter(Boolean).map(parseMove);
-  const invertMove = (m) => ({ face: m.face, depths: m.depths.slice(), turns: (4 - m.turns) % 4 });
+  const invertMove = (m) => ({ ...m, depths: m.depths.slice(), turns: 4 - m.turns });
   const invertAlg = (alg) => alg.slice().reverse().map(invertMove);
 
   // ---------- Cube ----------
@@ -120,7 +127,9 @@
     // Axe, couches concernées et nombre de quarts de tour (sens direct autour de +axe).
     moveGeometry(m) {
       const nv = NORMALS[m.face], k = axisOf(nv), s = nv[k];
-      const layers = m.depths.map((d) => (s > 0 ? this.n - d : d - 1));
+      const layers = m.whole
+        ? Array.from({ length: this.n }, (_, i) => i)
+        : m.depths.map((d) => (s > 0 ? this.n - d : d - 1));
       const q = (((-m.turns * s) % 4) + 4) % 4;
       return { axis: k, layers, q };
     }
@@ -268,8 +277,11 @@
   const OUTER_MOVES = [];
   FACES.forEach((f) => [1, 2, 3].forEach((t) => OUTER_MOVES.push({ face: f, depths: [1], turns: t })));
 
-  // Plus courte suite de mouvements extérieurs amenant l'arête (A,B) en UF.
-  function setupToUF(A, B) {
+  const ROTATIONS = [];
+  ['R', 'U', 'F'].forEach((f) => [1, 2, 3].forEach((t) => ROTATIONS.push({ face: f, whole: true, depths: [], turns: t })));
+
+  // Plus courte suite de mouvements (extérieurs, ou rotations du cube entier) amenant l'arête (A,B) en UF.
+  function setupToUF(A, B, moves = OUTER_MOVES) {
     const start = [NORMALS[A], NORMALS[B]];
     const isUF = (e) => {
       const s = e.map((v) => v.join()).sort().join('|');
@@ -281,9 +293,9 @@
       const next = [];
       for (const { e, path } of frontier) {
         if (isUF(e)) return path;
-        for (const m of OUTER_MOVES) {
+        for (const m of moves) {
           const nv = NORMALS[m.face], k = axisOf(nv), s = nv[k];
-          if (!e.some((v) => v[k] === s)) continue; // l'arête n'est pas dans cette couche
+          if (!m.whole && !e.some((v) => v[k] === s)) continue; // l'arête n'est pas dans cette couche
           const q = (((-m.turns * s) % 4) + 4) % 4;
           const e2 = e.map((v) => rot(v, k, q));
           const key = e2.map((v) => v.join()).sort().join('|');
@@ -323,13 +335,23 @@
     a.edges.forEach((e) => {
       if (e.unpaired.length) issues.push(`Arête ${e.name} : ailes n°${e.unpaired.map((j) => j + 1).join(', ')} non appariées.`);
     });
-    a.edges.filter((e) => e.flipped.length).forEach((e) => {
-      const setup = setupToUF(e.faces[0], e.faces[1]);
-      const label = `${e.name} (aile${e.flipped.length > 1 ? 's' : ''} n°${e.flipped.map((j) => j + 1).join(', ')})`;
-      setup.forEach((m) => steps.push({ move: m, phase: 'setup', note: `Amener l'arête ${e.name} en UF` }));
-      parityAlg(e.flipped).forEach((m) => steps.push({ move: m, phase: 'alg', note: `Parité sur ${label}` }));
-      invertAlg(setup).forEach((m) => steps.push({ move: m, phase: 'undo', note: `Remettre l'arête ${e.name} en place` }));
-    });
+    // Arête par arête : tourner le cube entier pour la mettre en haut devant, puis l'algorithme.
+    const work = cube.clone();
+    for (let guard = 0; guard < 12; guard++) {
+      const todo = analyze(work).edges.filter((e) => e.flipped.length);
+      if (!todo.length) break;
+      const e = todo.find((x) => x.name === 'UF') || todo[0];
+      const edge = { colors: e.colors, orbits: e.flipped };
+      const label = `aile${e.flipped.length > 1 ? 's' : ''} n°${e.flipped.map((j) => j + 1).join(', ')}`;
+      setupToUF(e.faces[0], e.faces[1], ROTATIONS).forEach((m) => {
+        steps.push({ move: m, phase: 'rotate', edge, note: `Tourner le cube : arête ${e.name} en haut devant` });
+        work.applyMove(m);
+      });
+      parityAlg(e.flipped).forEach((m) => {
+        steps.push({ move: m, phase: 'alg', edge, note: `Parité (${label})` });
+        work.applyMove(m);
+      });
+    }
     return { analysis: a, steps, issues };
   }
 
@@ -360,7 +382,7 @@
   const api = {
     FACES, NORMALS, FACE_AXES, COLORS, EDGES, Cube, rot, axisOf,
     moveToString, parseMove, parseAlg, invertMove, invertAlg,
-    analyze, setupToUF, parityAlg, solveParity, makeParityExample, makeFlippedState, wingStickers,
+    analyze, setupToUF, ROTATIONS, parityAlg, solveParity, makeParityExample, makeFlippedState, wingStickers,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RubikCore = api;

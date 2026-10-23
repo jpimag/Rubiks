@@ -19,7 +19,7 @@ function lcg(seed) {
 let checks = 0;
 
 // Notation : aller-retour texte <-> mouvement.
-for (const s of ['R', "3R'", 'Rw2', '4Rw', "2-5U'", 'B2']) {
+for (const s of ['R', "3R'", 'Rw2', '4Rw', "2-5U'", 'B2', 'x', "y'", 'z2']) {
   assert.strictEqual(C.moveToString(C.parseMove(s)), s);
   checks++;
 }
@@ -46,10 +46,21 @@ for (let j = 1; j <= (N - 3) / 2; j++) {
   checks++;
 }
 
-// Chaque arête peut être amenée en UF.
+// Chaque arête peut être amenée en UF, par mouvements de faces ou en tournant le cube entier.
 for (const [A, B] of C.EDGES) {
-  const setup = C.setupToUF(A, B);
-  assert(setup.length <= 3, A + B);
+  assert(C.setupToUF(A, B).length <= 3, A + B);
+  const rots = C.setupToUF(A, B, C.ROTATIONS);
+  assert(rots.length <= 2, A + B);
+  // Vérification sur le vrai cube : l'arête marquée se retrouve bien en UF.
+  const c = C.makeFlippedState(N, { [A + B]: [2] }).applyAlg(rots);
+  assert.deepStrictEqual(C.analyze(c).edges.filter((e) => e.flipped.length).map((e) => e.name), ['UF']);
+  checks += 2;
+}
+
+// Arête déjà en UF : aucune rotation, seulement l'algorithme.
+{
+  const sol = C.solveParity(C.makeFlippedState(N, { UF: [3] }));
+  assert(sol.steps.every((s) => s.phase === 'alg'));
   checks++;
 }
 

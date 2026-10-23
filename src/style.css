@@ -128,14 +128,14 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
 .report b { color: var(--ink); }
 .report .issue { color: var(--bad); }
 .report .edge-tag {
-  font-family: var(--font-mono); font-weight: 600; color: var(--mark);
+  font-weight: 600; color: var(--mark);
 }
 
 .player { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.now { display: grid; grid-template-columns: 3.2em minmax(0, 1fr) auto; align-items: center; gap: 12px; height: 46px; }
+.now { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; height: 46px; }
 .now-move {
   font-family: var(--font-display); font-weight: 700; font-size: 34px; line-height: 1;
-  text-align: center; color: var(--accent); white-space: nowrap;
+  text-align: center; color: var(--accent); white-space: nowrap; min-width: 1.6em;
   font-variant-numeric: tabular-nums;
 }
 .now-text { min-width: 0; }
@@ -243,7 +243,11 @@ button:focus-visible, label:focus-visible, input:focus-visible { outline: 2px so
 .edge-btn b, .wing-btn b { font-family: var(--font-display); font-size: 16px; }
 .edge-btn span, .wing-btn span { font-size: 11px; color: var(--muted); }
 .edge-btn[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
-.edge-btn[data-count]:not([data-count="0"]) b { color: var(--mark); }
+.edge-btn[data-count]:not([data-count="0"]) { border-color: var(--mark); }
+.edge-btn[data-count]:not([data-count="0"]) .pair-name { color: var(--mark); font-weight: 600; }
+.pair { display: flex; gap: 3px; }
+.pair-dot { display: inline-block; width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--body); vertical-align: -3px; }
+.quick-label .pair-dot { width: 14px; height: 14px; margin-right: 2px; }
 .wing-pick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .wing-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .wing-btn[aria-pressed="true"] span { color: var(--accent-ink); }

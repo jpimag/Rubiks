@@ -10,6 +10,12 @@
   const FACE_NAME = { U: 'du haut', D: 'du bas', F: 'avant', B: 'arrière', R: 'de droite', L: 'de gauche' };
   const FACE_SHORT = { U: 'haut', D: 'bas', F: 'avant', B: 'arrière', R: 'droite', L: 'gauche' };
   const FROM = { U: 'depuis le haut', D: 'depuis le bas', F: "depuis l'avant", B: "depuis l'arrière", R: 'depuis la droite', L: 'depuis la gauche' };
+  const WHERE = { U: 'en haut', D: 'en bas', F: 'devant', B: 'derrière', R: 'à droite', L: 'à gauche' };
+  const WHOLE_TURN = {
+    R: ['le devant monte', 'demi-tour vers le haut', 'le devant descend'],
+    U: ['le devant part à gauche', 'demi-tour sur lui-même', 'le devant part à droite'],
+    F: ['le haut part à droite', 'demi-tour sur le côté', 'le haut part à gauche'],
+  };
   const SEEN = { U: 'vu du haut', D: 'vu du bas', F: 'vu de face', B: "vu de l'arrière", R: 'vu de droite', L: 'vu de gauche' };
 
   // ---------- État ----------
@@ -34,7 +40,8 @@
   };
   const rotX = (a) => [1, 0, 0, 0, Math.cos(a), -Math.sin(a), 0, Math.sin(a), Math.cos(a)];
   const rotY = (a) => [Math.cos(a), 0, Math.sin(a), 0, 1, 0, -Math.sin(a), 0, Math.cos(a)];
-  const homeView = () => mul(rotX(0.48), rotY(-0.62));
+  // Vue de face, légèrement plongeante : l'arête du haut devant (UF) est bien visible.
+  const homeView = () => mul(rotX(0.5), rotY(-0.32));
   let view = homeView();
   let zoom = 1, panX = 0, panY = 0;
 
@@ -241,6 +248,7 @@
   const steps = () => (solution ? solution.steps : []);
 
   function describe(m) {
+    if (m.whole) return { what: 'Tourner tout le cube dans tes mains', turn: WHOLE_TURN[m.face][m.turns - 1] };
     const d = m.depths;
     let what;
     if (d.length === 1) what = d[0] === 1 ? `Face ${FACE_NAME[m.face]}` : `Tranche ${d[0]} ${FROM[m.face]}, seule`;
@@ -249,7 +257,22 @@
     return { what, turn: turn + (m.turns === 2 ? '' : ' ' + SEEN[m.face]) };
   }
 
+  const edgeColors = (cols) => `${colorName(cols[0])}-${colorName(cols[1])}`;
+  function stepNote(s) {
+    if (!s.edge) return s.note;
+    if (s.phase === 'rotate') return `arête ${edgeColors(s.edge.colors)} en haut devant`;
+    return `parité sur l'arête ${edgeColors(s.edge.colors)}`;
+  }
+
+  // Couleurs des centres actuellement en haut et devant (elles changent quand on tourne le cube).
+  function renderHold() {
+    const map = cube.indexByPos();
+    const up = cube.col[map.get(cube.key(0, N, 0))], front = cube.col[map.get(cube.key(0, 0, N))];
+    $('holdHint').innerHTML = `Tiens ton cube : <b>${colorName(up)}</b> en haut, <b>${colorName(front)}</b> face à toi`;
+  }
+
   function updatePlayer() {
+    if (!anim) renderHold();
     const st = steps();
     const total = st.length;
     const cur = anim && anim.forwardIndex != null ? anim.forwardIndex : idx;
@@ -268,7 +291,7 @@
       $('nowMove').textContent = C.moveToString(s.move);
       const d = describe(s.move);
       $('nowDesc').textContent = d.what;
-      $('nowNote').textContent = `${d.turn} · ${s.note}`;
+      $('nowNote').textContent = `${d.turn} · ${stepNote(s)}`;
     }
     $('btnPlay').textContent = playing ? '⏸' : '▶';
     $('btnPlay').setAttribute('aria-label', playing ? 'Pause' : 'Lecture');
@@ -374,9 +397,9 @@
   }
 
   function orbitText(orbits) {
-    const pos = orbits.map((j) => `n°${j + 1}`);
-    const list = pos.length > 1 ? pos.slice(0, -1).join(', ') + ' et ' + pos[pos.length - 1] : pos[0];
-    return `${orbits.length > 1 ? 'ailes' : 'aile'} ${list} depuis chaque coin`;
+    if (orbits.length === 1) return `ailes ${orbits[0] + 1} et ${N - orbits[0]}`;
+    const pos = orbits.map((j) => `${j + 1}/${N - j}`);
+    return `ailes ${pos.slice(0, -1).join(', ')} et ${pos[pos.length - 1]}`;
   }
 
   function renderReport() {
@@ -384,14 +407,14 @@
     const flipped = a.edges.filter((e) => e.flipped.length);
     const chip = $('statusChip');
     const parts = [];
-    const tag = source === 'exemple' ? 'Exemple généré au hasard. ' : source === 'saisie' ? 'Cube reconstruit depuis ta saisie. ' : '';
+    const tag = source === 'exemple' ? 'Exemple au hasard. ' : '';
     if (flipped.length) {
       chip.dataset.tone = 'warn';
       chip.textContent = `Parité : ${flipped.length} arête${flipped.length > 1 ? 's' : ''}`;
       flipped.forEach((e) => {
-        parts.push(`<b>Arête <span class="edge-tag">${e.name}</span> (${FACE_SHORT[e.faces[0]]}-${FACE_SHORT[e.faces[1]]})</b> : ${orbitText(e.flipped)} retournée${e.flipped.length > 1 ? 's' : ''}.`);
+        parts.push(`<b>Arête <span class="edge-tag">${edgeColors(e.colors)}</span></b> (${WHERE[e.faces[0]]} ${WHERE[e.faces[1]]}) : ${orbitText(e.flipped)} retournées.`);
       });
-      parts.push(`${solution.steps.length} mouvements. Les ailes concernées sont entourées.`);
+      parts.push(`${solution.steps.length} mouvements, ailes entourées en rose.`);
     } else if (!solution.issues.length) {
       chip.dataset.tone = 'ok';
       chip.textContent = 'Arêtes OK';
@@ -400,12 +423,14 @@
     if (solution.issues.length) {
       chip.dataset.tone = flipped.length ? 'warn' : 'bad';
       if (!flipped.length) chip.textContent = 'À vérifier';
-      parts.push(`<span class="issue">${solution.issues.slice(0, 3).join(' ')}${solution.issues.length > 3 ? ' …' : ''} Vérifie les couleurs avec Peindre.</span>`);
+      const msgs = [];
+      if (!a.centersOk) msgs.push('Les centres ne sont pas tous résolus.');
+      a.edges.filter((e) => e.unpaired.length).forEach((e) => {
+        msgs.push(`Arête ${edgeColors(e.colors)} : ${orbitText(e.unpaired)} non appariées.`);
+      });
+      parts.push(`<span class="issue">${msgs.slice(0, 3).join(' ')}${msgs.length > 3 ? ' …' : ''} Vérifie les couleurs avec Peindre.</span>`);
     }
     $('report').innerHTML = tag + parts.join(' ');
-
-    const c = a.centers;
-    $('holdHint').innerHTML = `Tiens ton cube : <b>${colorName(c.U)}</b> en haut, <b>${colorName(c.F)}</b> face à toi`;
   }
 
   // ---------- Sauvegarde locale ----------
@@ -887,64 +912,91 @@
   // =====================================================================
   // Saisie rapide : arête fautive + paires d'ailes retournées
   // =====================================================================
-  const quick = { edge: 'UF', flips: {} };
+  // Arêtes d'un cube aux couleurs standard (blanc/jaune, vert/bleu, rouge/orange opposés) :
+  // [couleur à mettre en haut, couleur à mettre face à soi].
+  const PAIRS = [[0, 2], [0, 1], [0, 5], [0, 4], [3, 2], [3, 1], [3, 5], [3, 4], [2, 1], [2, 4], [5, 1], [5, 4]];
   const ORBITS = Array.from({ length: (N - 3) / 2 }, (_, k) => k + 1);
+  const quick = { pair: 0, flips: {} }; // flips : indice de paire -> orbites, dans l'ordre de saisie
+  const stdName = (ci) => C.COLORS[ci].name;
+  const swatch = (ci) => `<i class="pair-dot" style="background:rgb(${DISPLAY_RGB[ci].join(',')})"></i>`;
+
+  // Couleur de chaque face (U, R, F, D, L, B) quand on tient le cube avec `top` en haut et `front` devant.
+  function orientationFor(top, front) {
+    let frontier = [[]];
+    for (let depth = 0; depth <= 3; depth++) {
+      for (const seq of frontier) {
+        const f = new C.Cube(3).applyAlg(seq).facelets();
+        if (f.U[4] === top && f.F[4] === front) return C.FACES.map((F) => f[F][4]);
+      }
+      frontier = frontier.flatMap((seq) => C.ROTATIONS.map((m) => seq.concat([m])));
+    }
+    return [0, 1, 2, 3, 4, 5];
+  }
 
   function renderQuick() {
     const ep = $('edgePick');
     ep.textContent = '';
-    C.EDGES.forEach(([A, B]) => {
-      const name = A + B;
+    PAIRS.forEach(([c1, c2], k) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'edge-btn';
-      b.setAttribute('aria-pressed', String(name === quick.edge));
-      b.dataset.count = String((quick.flips[name] || []).length);
-      b.innerHTML = `<b>${name}</b><span>${FACE_SHORT[A]}-${FACE_SHORT[B]}</span>`;
-      b.addEventListener('click', () => { quick.edge = name; renderQuick(); });
+      b.setAttribute('aria-pressed', String(k === quick.pair));
+      b.dataset.count = String((quick.flips[k] || []).length);
+      b.innerHTML = `<span class="pair">${swatch(c1)}${swatch(c2)}</span><span class="pair-name">${stdName(c1)}-${stdName(c2)}</span>`;
+      b.addEventListener('click', () => { quick.pair = k; renderQuick(); });
       ep.appendChild(b);
     });
     const wp = $('wingPick');
     wp.textContent = '';
-    const cur = quick.flips[quick.edge] || [];
+    const cur = quick.flips[quick.pair] || [];
     ORBITS.forEach((j) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'wing-btn';
       b.setAttribute('aria-pressed', String(cur.includes(j)));
-      b.innerHTML = `<b>${j + 1} et ${N - j}</b><span>${j === 1 ? 'près des coins' : j === ORBITS.length ? 'près du milieu' : 'ailes n°' + (j + 1)}</span>`;
+      b.innerHTML = `<b>${j + 1} et ${N - j}</b><span>${j === 1 ? 'près des coins' : j === ORBITS.length ? 'près du milieu' : ' '}</span>`;
       b.addEventListener('click', () => {
-        const list = (quick.flips[quick.edge] || []).slice();
+        const list = (quick.flips[quick.pair] || []).slice();
         const at = list.indexOf(j);
         if (at >= 0) list.splice(at, 1); else list.push(j);
         list.sort((x, y) => x - y);
-        if (list.length) quick.flips[quick.edge] = list; else delete quick.flips[quick.edge];
+        if (list.length) quick.flips[quick.pair] = list; else delete quick.flips[quick.pair];
         renderQuick();
       });
       wp.appendChild(b);
     });
-    const names = Object.keys(quick.flips);
-    $('quickSummary').innerHTML = names.length
-      ? 'Sélection : ' + names.map((n) => `<b>${n}</b> ailes ${quick.flips[n].map((j) => `${j + 1}/${N - j}`).join(', ')}`).join(' · ')
-      : 'Aucune aile sélectionnée.';
+    const [t, f] = PAIRS[quick.pair];
+    $('wingTitle').innerHTML = `2. Ailes retournées sur l'arête ${swatch(t)}${swatch(f)} ${stdName(t)}-${stdName(f)}`;
+    const keys = Object.keys(quick.flips);
+    if (!keys.length) $('quickSummary').innerHTML = 'Aucune aile sélectionnée.';
+    else {
+      const [t0, f0] = PAIRS[keys[0]];
+      $('quickSummary').innerHTML = keys.map((k) => `<b>${stdName(PAIRS[k][0])}-${stdName(PAIRS[k][1])}</b> : ailes ${quick.flips[k].map((j) => `${j + 1}/${N - j}`).join(', ')}`).join(' · ')
+        + `<br>Tu tiendras ton cube avec le <b>${stdName(t0)}</b> en haut et le <b>${stdName(f0)}</b> face à toi.`;
+    }
   }
 
   $('btnQuick').addEventListener('click', () => {
     stop();
-    quick.flips = {};
-    if (source === 'saisie' || source === 'photo') {
-      solution.analysis.edges.forEach((e) => { if (e.flipped.length) quick.flips[e.name] = e.flipped.slice(); });
-    }
-    quick.edge = Object.keys(quick.flips)[0] || 'UF';
     renderQuick();
     $('quickSheet').hidden = false;
   });
   $('btnQuickClose').addEventListener('click', () => { $('quickSheet').hidden = true; });
   $('btnQuickClear').addEventListener('click', () => { quick.flips = {}; renderQuick(); });
   $('btnQuickApply').addEventListener('click', () => {
-    cube = C.makeFlippedState(N, quick.flips);
+    const keys = Object.keys(quick.flips);
+    const [top, front] = PAIRS[keys.length ? keys[0] : quick.pair];
+    const pal = orientationFor(top, front);
+    const flips = {};
+    keys.forEach((k) => {
+      const fa = C.FACES[pal.indexOf(PAIRS[k][0])], fb = C.FACES[pal.indexOf(PAIRS[k][1])];
+      const edge = C.EDGES.find(([A, B]) => (A === fa && B === fb) || (A === fb && B === fa));
+      flips[edge.join('')] = quick.flips[k];
+    });
+    cube = C.makeFlippedState(N, flips);
+    paletteMap = pal;
     source = 'saisie';
-    paletteMap = [0, 1, 2, 3, 4, 5];
+    view = homeView(); zoom = 1; panX = panY = 0;
     recompute();
     $('quickSheet').hidden = true;
     requestAnimationFrame(resize);
